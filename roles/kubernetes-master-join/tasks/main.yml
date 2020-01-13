@@ -1,0 +1,49 @@
+---
+- name: create directory for certificates in control planes
+  file:
+    path: /etc/kubernetes/pki/etcd
+    state: directory
+
+
+- name: Copy ca.crt
+  copy: src=buffer/ca.crt dest=/etc/kubernetes/pki/
+
+- name: Copy ca.key
+  copy: src=buffer/ca.key dest=/etc/kubernetes/pki/
+
+- name: Copy sa.pub
+  copy: src=buffer/sa.pub dest=/etc/kubernetes/pki/
+
+- name: Copy sa.key
+  copy: src=buffer/sa.key dest=/etc/kubernetes/pki/
+
+- name: Copy front-proxy-ca.crt
+  copy: src=buffer/front-proxy-ca.crt dest=/etc/kubernetes/pki/
+
+- name: Copy front-proxy-ca.key
+  copy: src=buffer/front-proxy-ca.key dest=/etc/kubernetes/pki/
+
+- name: Copy etcd-ca.crt
+  copy: src=buffer/etcd-ca.crt dest=/etc/kubernetes/pki/etcd/ca.crt
+
+- name: Copy etcd-ca.key
+  copy: src=buffer/etcd-ca.key dest=/etc/kubernetes/pki/etcd/ca.key
+
+- name: Generate join token
+  shell: kubeadm token create
+  register: kubeadm_join_token
+  delegate_to: "{{ groups['kube-master'][0] }}"
+
+- set_fact:
+    kubeadm_join_token: "{{ kubeadm_join_token.stdout }}"
+
+- name: Generate join ca cert hash
+  shell: openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //'
+  register: kubeadm_join_ca_hash
+  delegate_to: "{{ groups['kube-master'][0] }}"
+
+- set_fact:
+    kubeadm_join_ca_hash: "{{ kubeadm_join_ca_hash.stdout }}"
+
+- name: Run kubeadm join
+  shell: "kubeadm join {{ apiserver_loadbalancer_domain_name }}:{{ api_port }} --control-plane --token {{ kubeadm_join_token }} --discovery-token-ca-cert-hash sha256:{{ kubeadm_join_ca_hash }}"

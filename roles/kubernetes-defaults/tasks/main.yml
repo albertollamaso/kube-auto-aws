@@ -1,0 +1,33 @@
+---
+- name: apt-get install apt-transport-https curl
+  apt:
+    pkg:
+    - apt-transport-https
+    - curl
+
+- name: Download apt-key.gpg
+  apt_key:
+     url: "https://packages.cloud.google.com/apt/doc/apt-key.gpg"
+     state: present
+
+- name: Add kubernetes-xenial deb repository
+  apt_repository:
+    repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
+    state: present
+
+- name: apt-get update
+  apt:
+    update_cache: yes
+
+- name: apt-get install kubelet kubeadm kubectl kubernetes-cni
+  apt:
+    pkg:
+    - kubelet
+    - kubeadm
+    - kubectl
+    - kubernetes-cni
+
+- name: apt-mark hold kubelet kubeadm kubectl
+  become: yes
+  shell: apt-mark hold kubelet kubeadm kubectl
+

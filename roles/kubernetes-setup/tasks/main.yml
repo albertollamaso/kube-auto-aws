@@ -1,0 +1,67 @@
+---
+- name: check if kubernetes is installed
+  stat: path=/etc/kubernetes/admin.conf
+  register: admin_conf
+
+- name: Initialize the control plane
+  shell: kubeadm init --pod-network-cidr 192.168.0.0/16 --control-plane-endpoint "{{ apiserver_loadbalancer_domain_name }}:{{ api_port }}"
+  when: not admin_conf.stat.exists
+  register: kubeadm_init
+  run_once: yes
+
+- name: Create directory for kube config file
+  file:
+    path: "{{ ansible_env.HOME }}/.kube"
+    state: directory
+  run_once: yes
+
+- name: Copy kubernetes admin.conf file to home directory
+  command: cp -i /etc/kubernetes/admin.conf {{ansible_env.HOME}}/.kube/config
+  become: yes
+  run_once: yes
+
+- name: Set owner to kubernetes config file in home directory
+  file: path="{{ansible_env.HOME}}/.kube/config" owner="{{ansible_env.USER}}"
+  become: yes
+  run_once: yes
+
+- name: Don't run pods on master nodes
+  command: kubectl taint nodes --all node-role.kubernetes.io/master-
+  ignore_errors: yes
+  run_once: yes
+
+- name: Copy certificates from master to local
+  run_once: yes
+  fetch: src=/etc/kubernetes/pki/ca.crt dest=buffer/ flat=yes
+
+- name: Copy certificates from master to local
+  run_once: yes
+  fetch: src=/etc/kubernetes/pki/ca.key dest=buffer/ flat=yes
+
+- name: Copy certificates from master to local
+  run_once: yes
+  fetch: src=/etc/kubernetes/pki/sa.key dest=buffer/ flat=yes
+
+- name: Copy certificates from master to local
+  run_once: yes
+  fetch: src=/etc/kubernetes/pki/sa.pub dest=buffer/ flat=yes
+
+- name: Copy certificates from master to local
+  run_once: yes
+  fetch: src=/etc/kubernetes/pki/front-proxy-ca.crt dest=buffer/ flat=yes
+
+- name: Copy certificates from master to local
+  run_once: yes
+  fetch: src=/etc/kubernetes/pki/front-proxy-ca.key dest=buffer/ flat=yes
+
+- name: Copy certificates from master to local
+  run_once: yes
+  fetch: src=/etc/kubernetes/pki/etcd/ca.crt dest=buffer/etcd-ca.crt flat=yes
+
+- name: Copy certificates from master to local
+  run_once: yes
+  fetch: src=/etc/kubernetes/pki/etcd/ca.key dest=buffer/etcd-ca.key flat=yes
+
+- name: Intall Weave
+  shell: kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+  delegate_to: "{{ groups['kube-master'][0] }}"

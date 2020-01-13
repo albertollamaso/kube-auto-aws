@@ -1,0 +1,69 @@
+---
+- hosts: localhost
+  gather_facts: false
+  become: no
+  tasks:
+    - name: "Check ansible version >=2.7.8"
+      assert:
+        msg: "Ansible must be v2.7.8 or higher"
+        that:
+          - ansible_version.string is version("2.7.8", ">=")
+      tags:
+        - check
+  vars:
+    ansible_connection: local
+
+
+- hosts: k8s-cluster
+  become: yes
+  tasks:
+  - name: Remove backports deb package failing to retrieve (delete file)
+    file:
+      path: /etc/apt/sources.list.d/backports.list
+      state: absent
+  - name: apt-get update
+    apt:
+      update_cache: yes
+
+
+- hosts: k8s-cluster
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - { role: docker}
+    - { role: kubernetes-defaults}
+
+- hosts: kube-master[0]
+  become: yes
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - { role: kubernetes-setup}
+
+- hosts: kube-master[1:]
+  become: yes
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - { role: kubernetes-master-join}
+
+- hosts: kube-node
+  become: yes
+  any_errors_fatal: "{{ any_errors_fatal | default(true) }}"
+  roles:
+    - { role: kubernetes-worker-join}
+
+- hosts: localhost
+  gather_facts: false
+  become: no
+  tasks:
+    - name: Delete certificates from localhost
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - buffer/ca.crt 
+        - buffer/ca.key
+        - buffer/etcd-ca.crt
+        - buffer/etcd-ca.key
+        - buffer/front-proxy-ca.crt
+        - buffer/front-proxy-ca.key
+        - buffer/sa.key
+        - buffer/sa.pub
